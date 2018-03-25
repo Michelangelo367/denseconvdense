@@ -18,7 +18,7 @@ class TestDenseConvDense(unittest.TestCase):
 
         self.model = DenseConvDense(n_input_features=self.train_x.shape[1], n_outputs=self.train_y.shape[1],
                                     abstraction_activation_functions=('sigmoid', 'tanh', 'relu'),
-                                    n_hidden_nodes=10, keep_probability=0.5, initialization='RBM')
+                                    n_hidden_nodes=100, keep_probability=0.5, initialization='RBM')
 
         self.model.build()
 

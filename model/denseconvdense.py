@@ -47,7 +47,7 @@ class DenseConvDense(object):
 
         self.add_summaries = add_summaries
 
-        self.summaries_dir = '/home/lucas/git/denseconvdense/log'
+        self.summaries_dir = '../log'
 
         #
         # TODO It is not used, yet!
@@ -89,6 +89,8 @@ class DenseConvDense(object):
 
         self.build_optimizers()
 
+        print('Optimizing model')
+
         if batch_size is None:
             batch_size = x.shape[0]
 
@@ -109,7 +111,7 @@ class DenseConvDense(object):
 
             index = np.array(list(range(n_rows)), dtype=np.int)
 
-            j = 1
+            j = 0
 
             for step in range(steps):
 
@@ -130,11 +132,10 @@ class DenseConvDense(object):
 
                     current_block += batch_size
 
-                    if j % 5 == 0 and self.add_summaries:
+                    if j % 10 == 0 and self.add_summaries:
                         train_writer.add_summary(train_results[0], j)
 
                     j += 1
-
 
                 test_results = sess.run([self.merged] + self.accuracies,
                                         feed_dict={self.raw_input: x_test, self.expected_output: y_test, self.keep_prob: 1.})
@@ -147,6 +148,8 @@ class DenseConvDense(object):
 
     def build(self):
 
+        print('Building model')
+
         self.raw_input = tf.placeholder(tf.float32, shape=(None, self.n_input_features), name='raw_input')
 
         self.expected_output = tf.placeholder(tf.float32, shape=(None, self.n_outputs), name='expected_output')
@@ -157,9 +160,7 @@ class DenseConvDense(object):
 
                 with tf.name_scope('{}_model'.format(activation_function)):
 
-                    previous_layer_size = self.n_input_features
-
-                    previous_layer = self.raw_input
+                    previous_layer_size, previous_layer = self.n_input_features, self.raw_input
 
                     for j in range(self.n_hidden_layers):
 
@@ -207,6 +208,8 @@ class DenseConvDense(object):
                             util.create_tf_scalar_summaries(self.models[i], 'output')
 
     def build_optimizers(self):
+
+        print('Building optimizers')
 
         for i, (model, optimizer, activation_function) in \
                 enumerate(zip(self.models, self.optimizer_algorithms, self.abstraction_activation_functions)):
