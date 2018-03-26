@@ -3,6 +3,7 @@ warnings.filterwarnings("ignore")
 
 import tensorflow as tf
 import util
+import os
 import numpy as np
 
 
@@ -15,10 +16,18 @@ class DenseConvDense(object):
 
     VALID_COST_FUNCTIONS = ('softmax_cross_entroy')
 
-    def __init__(self, n_input_features, n_outputs, abstraction_activation_functions=('sigmoid', 'tanh', 'relu'),
+    def __init__(self, session=tf.Session(), summaries_dir='../log'):
+
+        self.sess = session
+
+        self.summaries_dir = summaries_dir
+
+        self.saver = None
+
+    def init(self,  n_input_features, n_outputs, abstraction_activation_functions=('sigmoid', 'tanh', 'relu'),
                  n_hidden_layers=3, n_hidden_nodes=10, keep_probability=0.5, initialization='RBM',
                  optimizer_algorithms=('sgd', 'sgd', 'sgd'), cost_function='softmax_cross_entropy', add_summaries=True,
-                 batch_normalization=False, session=tf.Session()):
+                 batch_normalization=False):
 
         assert isinstance(n_hidden_nodes, int) and isinstance(abstraction_activation_functions, tuple)
 
@@ -50,10 +59,6 @@ class DenseConvDense(object):
 
         self.batch_normalization = batch_normalization
 
-        self.summaries_dir = '../log'
-
-        self.sess = session
-
         #
         # TODO It is not used, yet!
         #
@@ -68,11 +73,10 @@ class DenseConvDense(object):
 
         self.expected_output = None
 
+        self.model_path = None
+
         self.keep_prob = tf.placeholder(tf.float32, name='dropout_keep_probability')
-        #
-        #
-        #
-        self.saver = None
+
         #
         #
         #
@@ -112,7 +116,11 @@ class DenseConvDense(object):
         if y_test is None:
             y_test = y
 
+        #
+        # FIXME check if there is not unitialized variables
+        #
         self.sess.run(tf.global_variables_initializer())
+
         self.sess.run(tf.local_variables_initializer())
 
         test_writer = tf.summary.FileWriter(self.summaries_dir + '/{}'.format(self.model_name))
@@ -153,23 +161,40 @@ class DenseConvDense(object):
                 test_writer.add_summary(test_results[0], step)
 
     def predict(self, x):
-         return self.sess.run(self.abstraction_activation_functions, feed_dict={self.ra})
+         return self.sess.run(self.abstraction_activation_functions, feed_dict={self.raw_input: x})
 
     def load(self, model_path):
 
-        self.build()
+        if os.path.exists('{}.meta'.format(model_path)) and os.path.isfile('{}.meta'.format(model_path)):
 
-        self.saver.restore(self.sess, model_path)
+            tf.reset_default_graph()
 
-    def build(self):
+            self.saver = tf.train.import_meta_graph('{}.meta'.format(model_path))
+
+            print(os.path.dirname(model_path))
+
+            self.saver.restore(self.sess, tf.train.latest_checkpoint(os.path.dirname(model_path)))
+
+            for a in [n.name for n in tf.get_default_graph().as_graph_def().node]:
+                print(a)
+
+
+
+    def build(self, n_input_features, n_outputs, abstraction_activation_functions,
+                 n_hidden_layers, n_hidden_nodes, keep_probability, initialization,
+                 optimizer_algorithms, cost_function, add_summaries,
+                 batch_normalization):
 
         print('Building model')
+
+        self.init( n_input_features, n_outputs, abstraction_activation_functions,
+                 n_hidden_layers, n_hidden_nodes, keep_probability, initialization,
+                 optimizer_algorithms, cost_function, add_summaries,
+                 batch_normalization)
 
         self.raw_input = tf.placeholder(tf.float32, shape=(None, self.n_input_features), name='raw_input')
 
         self.expected_output = tf.placeholder(tf.float32, shape=(None, self.n_outputs), name='expected_output')
-
-        vars_to_save = []
 
         with tf.name_scope('abstraction_layer'):
 
@@ -197,8 +222,6 @@ class DenseConvDense(object):
 
                             b = tf.Variable(tf.truncated_normal([self.n_hidden_nodes], stddev=.1), name=bias_name)
 
-                            vars_to_save += [w, b]
-
                             self.abstract_representation[i][j] = \
                                 tf.nn.dropout(af(tf.add(tf.matmul(previous_layer, w), b)), self.keep_prob)
 
@@ -223,8 +246,6 @@ class DenseConvDense(object):
 
                         b = tf.Variable(tf.truncated_normal([self.n_outputs], stddev=.1), name=bias_name)
 
-                        vars_to_save += [w, b]
-
                         self.models[i] = tf.add(tf.matmul(previous_layer, w), b)
 
                         if self.add_summaries:
@@ -232,7 +253,7 @@ class DenseConvDense(object):
                             util.create_tf_scalar_summaries(b, 'biases')
                             util.create_tf_scalar_summaries(self.models[i], 'output')
 
-        self.saver = tf.train.Saver(vars_to_save)
+        self.saver = tf.train.Saver()
 
     def build_optimizers(self):
 

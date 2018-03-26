@@ -16,11 +16,20 @@ class TestDenseConvDense(unittest.TestCase):
 
     def test_model(self):
 
-        self.model = DenseConvDense(n_input_features=self.train_x.shape[1], n_outputs=self.train_y.shape[1],
-                                    abstraction_activation_functions=('sigmoid', 'tanh', 'relu'),
-                                    n_hidden_nodes=100, keep_probability=0.5, initialization='RBM',
-                                    batch_normalization=True)
+        self.model = DenseConvDense()
 
-        self.model.build()
+        self.model.build(n_input_features=self.train_x.shape[1], n_outputs=self.train_y.shape[1],
+                         abstraction_activation_functions=('sigmoid', 'tanh', 'relu'),
+                         n_hidden_nodes=100, keep_probability=0.5, initialization='RBM',
+                         batch_normalization=True)
 
         self.model.optimize(self.train_x, self.train_y)
+
+    def test_load(self):
+
+        self.model = DenseConvDense()
+
+        self.model.load('../output/model/M0001/M0003-999')
+
+
+
