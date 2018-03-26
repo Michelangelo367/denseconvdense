@@ -18,7 +18,7 @@ class DenseConvDense(object):
     def __init__(self, n_input_features, n_outputs, abstraction_activation_functions=('sigmoid', 'tanh', 'relu'),
                  n_hidden_layers=3, n_hidden_nodes=10, keep_probability=0.5, initialization='RBM',
                  optimizer_algorithms=('sgd', 'sgd', 'sgd'), cost_function='softmax_cross_entropy', add_summaries=True,
-                 batch_normalization=False):
+                 batch_normalization=False, session=tf.Session()):
 
         assert isinstance(n_hidden_nodes, int) and isinstance(abstraction_activation_functions, tuple)
 
@@ -51,6 +51,8 @@ class DenseConvDense(object):
         self.batch_normalization = batch_normalization
 
         self.summaries_dir = '../log'
+
+        self.sess = session
 
         #
         # TODO It is not used, yet!
@@ -108,57 +110,54 @@ class DenseConvDense(object):
         if y_test is None:
             y_test = y
 
-        with tf.Session() as sess:
+        self.sess.run(tf.global_variables_initializer())
+        self.sess.run(tf.local_variables_initializer())
 
-            sess.run(tf.global_variables_initializer())
-            sess.run(tf.local_variables_initializer())
+        test_writer = tf.summary.FileWriter(self.summaries_dir + '/{}'.format(self.model_name))
 
-            test_writer = tf.summary.FileWriter(self.summaries_dir + '/{}'.format(self.model_name))
+        n_rows = x.shape[0]
 
-            n_rows = x.shape[0]
+        index = np.array(list(range(n_rows)), dtype=np.int)
 
-            index = np.array(list(range(n_rows)), dtype=np.int)
+        j = 0
 
-            j = 0
+        for step in range(steps):
 
-            for step in range(steps):
+            current_block = 0
 
-                current_block = 0
+            while (current_block < n_rows):
 
-                while (current_block < n_rows):
+                if shuffle:
+                    np.random.shuffle(index)
 
-                    if shuffle:
-                        np.random.shuffle(index)
+                batch = list(range(current_block, (min(current_block + batch_size, n_rows))))
 
-                    batch = list(range(current_block, (min(current_block + batch_size, n_rows))))
+                train_results = self.sess.run([self.merged] + self.optimizers,
+                                        feed_dict={self.raw_input: x[index[batch], :],
+                                                   self.expected_output: y[index[batch], :],
+                                                   self.keep_prob: self.keep_probability,
+                                                   self.lr: learning_rate})
 
-                    train_results = sess.run([self.merged] + self.optimizers,
-                                            feed_dict={self.raw_input: x[index[batch], :],
-                                                       self.expected_output: y[index[batch], :],
-                                                       self.keep_prob: self.keep_probability,
-                                                       self.lr: learning_rate})
+                current_block += batch_size
 
-                    current_block += batch_size
+                j += 1
 
-                    j += 1
+            test_results = self.sess.run([self.merged] + self.accuracies + self.confusion_update,
+                                    feed_dict={self.raw_input: x_test, self.expected_output: y_test, self.keep_prob: 1.})
 
-                test_results = sess.run([self.merged] + self.accuracies + self.confusion_update,
-                                        feed_dict={self.raw_input: x_test, self.expected_output: y_test, self.keep_prob: 1.})
+            self.saver.save(self.sess, '../output/{0}/{0}'.format(self.model_name), global_step=step)
 
-                self.saver.save(sess, '../output/{0}/{0}'.format(self.model_name), global_step=step)
-
-                if self.add_summaries:
-                    test_writer.add_summary(test_results[0], step)
-
+            if self.add_summaries:
+                test_writer.add_summary(test_results[0], step)
 
     def predict(self, x):
-
-        with tf.Session() as sess:
-
-            sess.run(self.abstraction_activation_functions, feed_dict={})
+         return self.sess.run(self.abstraction_activation_functions, feed_dict={self.ra})
 
     def load(self, model_path):
-        pass
+
+        self.build()
+
+        self.saver.restore(self.sess, model_path)
 
     def build(self):
 
