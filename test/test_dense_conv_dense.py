@@ -7,9 +7,11 @@ from model import DenseConvDense
 class TestDenseConvDense(unittest.TestCase):
 
     def setUp(self):
+
         train = pd.read_table('../input/mnist/train.csv', sep=',')
 
         self.train_x = train.iloc[:, 1:].as_matrix()
+
         self.train_y = pd.get_dummies(train.iloc[:, 0]).as_matrix()
 
         #self.test = pd.read_table('../input/test.csv', sep=',')
