@@ -89,6 +89,8 @@ class DenseConvDense(object):
 
         self.train_writer, self.test_writer = None, None
 
+        self.merged = None
+
     def optimize(self, x, y, x_test=None, y_test=None, learning_rate=1e-5, steps=1000, batch_size=1000, shuffle=True):
 
         assert steps > 0
@@ -150,15 +152,15 @@ class DenseConvDense(object):
                 if self.add_summaries:
                     test_writer.add_summary(test_results[0], step)
 
-
     def predict(self, x):
 
         with tf.Session() as sess:
-
-            sess.run(self.abstraction_activation_functions, feed_dict={})
+            return sess.run(self.abstract_representation, feed_dict={self.raw_input: x})
 
     def load(self, model_path):
-        pass
+
+        self.build()
+
 
     def build(self):
 
@@ -295,4 +297,3 @@ class DenseConvDense(object):
                 # Create summary tensors
                 #
                 self.merged = tf.summary.merge_all()
-
