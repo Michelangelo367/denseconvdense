@@ -91,6 +91,8 @@ class DenseConvDense(object):
 
         self.train_writer, self.test_writer = None, None
 
+        self.merged = None
+
     def optimize(self, x, y, x_test=None, y_test=None, learning_rate=1e-5, steps=1000, batch_size=1000, shuffle=True):
 
         assert steps > 0
