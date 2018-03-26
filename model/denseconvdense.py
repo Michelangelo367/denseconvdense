@@ -17,7 +17,8 @@ class DenseConvDense(object):
 
     def __init__(self, n_input_features, n_outputs, abstraction_activation_functions=('sigmoid', 'tanh', 'relu'),
                  n_hidden_layers=3, n_hidden_nodes=10, keep_probability=0.5, initialization='RBM',
-                 optimizer_algorithms=('sgd', 'sgd', 'sgd'), cost_function='softmax_cross_entropy', add_summaries=True):
+                 optimizer_algorithms=('sgd', 'sgd', 'sgd'), cost_function='softmax_cross_entropy', add_summaries=True,
+                 batch_normalization=False):
 
         assert isinstance(n_hidden_nodes, int) and isinstance(abstraction_activation_functions, tuple)
 
@@ -47,12 +48,16 @@ class DenseConvDense(object):
 
         self.add_summaries = add_summaries
 
+        self.batch_normalization = batch_normalization
+
         self.summaries_dir = '../log'
 
         #
         # TODO It is not used, yet!
         #
         self.initialization = initialization
+
+        self.model_name = 'M0003'
 
         #
         # Placeholders
@@ -62,7 +67,10 @@ class DenseConvDense(object):
         self.expected_output = None
 
         self.keep_prob = tf.placeholder(tf.float32, name='dropout_keep_probability')
-
+        #
+        #
+        #
+        self.saver = None
         #
         #
         #
@@ -103,9 +111,9 @@ class DenseConvDense(object):
         with tf.Session() as sess:
 
             sess.run(tf.global_variables_initializer())
+            sess.run(tf.local_variables_initializer())
 
-            train_writer = tf.summary.FileWriter(self.summaries_dir + '/train', sess.graph)
-            test_writer = tf.summary.FileWriter(self.summaries_dir + '/test')
+            test_writer = tf.summary.FileWriter(self.summaries_dir + '/{}'.format(self.model_name))
 
             n_rows = x.shape[0]
 
@@ -132,18 +140,24 @@ class DenseConvDense(object):
 
                     current_block += batch_size
 
-                    if j % 10 == 0 and self.add_summaries:
-                        train_writer.add_summary(train_results[0], j)
-
                     j += 1
 
-                test_results = sess.run([self.merged] + self.accuracies,
+                test_results = sess.run([self.merged] + self.accuracies + self.confusion_update,
                                         feed_dict={self.raw_input: x_test, self.expected_output: y_test, self.keep_prob: 1.})
+
+                self.saver.save(sess, '../output/{0}/{0}'.format(self.model_name), global_step=step)
 
                 if self.add_summaries:
                     test_writer.add_summary(test_results[0], step)
 
+
     def predict(self, x):
+
+        with tf.Session() as sess:
+
+            sess.run(self.abstraction_activation_functions, feed_dict={})
+
+    def load(self, model_path):
         pass
 
     def build(self):
@@ -153,6 +167,8 @@ class DenseConvDense(object):
         self.raw_input = tf.placeholder(tf.float32, shape=(None, self.n_input_features), name='raw_input')
 
         self.expected_output = tf.placeholder(tf.float32, shape=(None, self.n_outputs), name='expected_output')
+
+        vars_to_save = []
 
         with tf.name_scope('abstraction_layer'):
 
@@ -180,8 +196,14 @@ class DenseConvDense(object):
 
                             b = tf.Variable(tf.truncated_normal([self.n_hidden_nodes], stddev=.1), name=bias_name)
 
+                            vars_to_save += [w, b]
+
                             self.abstract_representation[i][j] = \
                                 tf.nn.dropout(af(tf.add(tf.matmul(previous_layer, w), b)), self.keep_prob)
+
+                            if self.batch_normalization:
+                                bn_name = 'bn_{}_h{}{}'.format(activation_function, i + 1, j + 1)
+                                self.abstract_representation[i][j] = tf.layers.batch_normalization(self.abstract_representation[i][j], name=bn_name)
 
                             previous_layer, previous_layer_size = self.abstract_representation[i][j], self.n_hidden_nodes
 
@@ -200,6 +222,8 @@ class DenseConvDense(object):
 
                         b = tf.Variable(tf.truncated_normal([self.n_outputs], stddev=.1), name=bias_name)
 
+                        vars_to_save += [w, b]
+
                         self.models[i] = tf.add(tf.matmul(previous_layer, w), b)
 
                         if self.add_summaries:
@@ -207,9 +231,13 @@ class DenseConvDense(object):
                             util.create_tf_scalar_summaries(b, 'biases')
                             util.create_tf_scalar_summaries(self.models[i], 'output')
 
+        self.saver = tf.train.Saver(vars_to_save)
+
     def build_optimizers(self):
 
         print('Building optimizers')
+
+        self.confusion_update = []
 
         for i, (model, optimizer, activation_function) in \
                 enumerate(zip(self.models, self.optimizer_algorithms, self.abstraction_activation_functions)):
@@ -240,6 +268,31 @@ class DenseConvDense(object):
                     self.accuracies[i] = tf.reduce_mean(tf.cast(self.correct_predictions[i], tf.float32))
 
             if self.add_summaries:
+
                 tf.summary.scalar('accuracy_{}'.format(activation_function), self.accuracies[i])
+
+                #
+                # Compute confusion matrix
+                #
+                with tf.name_scope('confusion_matrix_{}'.format(activation_function)):
+
+                    batch_confusion = tf.confusion_matrix(tf.argmax(self.expected_output, 1), tf.argmax(model, 1),
+                                                          num_classes=self.n_outputs,
+                                                          name='batch_confusion')
+
+                    confusion = tf.Variable(tf.zeros([self.n_outputs, self.n_outputs],
+                                                     dtype=tf.int32),
+                                            name='confusion_var_{}'.format(activation_function))
+
+                    self.confusion_update += [confusion.assign(batch_confusion)]
+
+                    confusion_image = tf.reshape(tf.cast(confusion, tf.float32),
+                                                 [1, self.n_outputs, self.n_outputs, 1])
+
+                    tf.summary.image('confusion_{}'.format(activation_function), confusion_image)
+
+                #
+                # Create summary tensors
+                #
                 self.merged = tf.summary.merge_all()
 
