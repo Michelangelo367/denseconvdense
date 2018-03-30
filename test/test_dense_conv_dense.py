@@ -32,6 +32,3 @@ class TestDenseConvDense(unittest.TestCase):
         self.model = DenseConvDense()
 
         self.model.load('../output/model/M0001/M0003-999')
-
-
-

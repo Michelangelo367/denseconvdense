@@ -16,7 +16,7 @@ class DenseConvDense(object):
 
     VALID_COST_FUNCTIONS = ('softmax_cross_entroy')
 
-    def __init__(self, session=tf.Session(), summaries_dir='../log'):
+    def __init__(self, session=tf.Session(), summaries_dir='../log', model_name='M0000'):
 
         self.sess = session
 
@@ -24,10 +24,12 @@ class DenseConvDense(object):
 
         self.saver = None
 
+        self.model_name = model_name
+
     def init(self,  n_input_features, n_outputs, abstraction_activation_functions=('sigmoid', 'tanh', 'relu'),
-                 n_hidden_layers=3, n_hidden_nodes=10, keep_probability=0.5, initialization='RBM',
-                 optimizer_algorithms=('sgd', 'sgd', 'sgd'), cost_function='softmax_cross_entropy', add_summaries=True,
-                 batch_normalization=False):
+             n_hidden_layers=3, n_hidden_nodes=10, keep_probability=0.5, initialization='RBM',
+             optimizer_algorithms=('sgd', 'sgd', 'sgd'), cost_function='softmax_cross_entropy', add_summaries=True,
+             batch_normalization=False):
 
         assert isinstance(n_hidden_nodes, int) and isinstance(abstraction_activation_functions, tuple)
 
@@ -53,7 +55,7 @@ class DenseConvDense(object):
 
         self.cost_function = cost_function
 
-        self.lr = tf.placeholder(tf.float32, name='learning_rate')
+        self.lr = None
 
         self.add_summaries = add_summaries
 
@@ -64,8 +66,6 @@ class DenseConvDense(object):
         #
         self.initialization = initialization
 
-        self.model_name = 'M0003'
-
         #
         # Placeholders
         #
@@ -75,7 +75,7 @@ class DenseConvDense(object):
 
         self.model_path = None
 
-        self.keep_prob = tf.placeholder(tf.float32, name='dropout_keep_probability')
+        self.keep_prob = None
 
         #
         #
@@ -91,9 +91,9 @@ class DenseConvDense(object):
         self.accuracies = [None for _ in range(len(abstraction_activation_functions))]
 
         self.abstract_representation = [[None for _ in range(n_hidden_layers)]
-                                        for _ in range(len(abstraction_activation_functions))]
+                                         for _ in range(len(abstraction_activation_functions))]
 
-        self.train_writer, self.test_writer = None, None
+        self.test_writer = None
 
         self.merged = None
 
@@ -142,11 +142,9 @@ class DenseConvDense(object):
 
                 batch = list(range(current_block, (min(current_block + batch_size, n_rows))))
 
-                train_results = self.sess.run([self.merged] + self.optimizers,
-                                        feed_dict={self.raw_input: x[index[batch], :],
-                                                   self.expected_output: y[index[batch], :],
-                                                   self.keep_prob: self.keep_probability,
-                                                   self.lr: learning_rate})
+                self.sess.run([self.merged] + self.optimizers,
+                              feed_dict={self.raw_input: x[index[batch], :], self.expected_output: y[index[batch], :],
+                                         self.keep_prob: self.keep_probability, self.lr: learning_rate})
 
                 current_block += batch_size
 
@@ -167,25 +165,35 @@ class DenseConvDense(object):
 
         if os.path.exists('{}.meta'.format(model_path)) and os.path.isfile('{}.meta'.format(model_path)):
 
-            tf.reset_default_graph()
-
             self.saver = tf.train.import_meta_graph('{}.meta'.format(model_path))
-
-            print(os.path.dirname(model_path))
 
             self.saver.restore(self.sess, tf.train.latest_checkpoint(os.path.dirname(model_path)))
 
-            for a in [n.name for n in tf.get_default_graph().as_graph_def().node]:
-                print(a)
+            self.raw_input = tf.get_default_graph().get_tensor_by_name('raw_input:0')
 
+            self.expected_output = tf.get_default_graph().get_tensor_by_name('expected_output:0')
 
+            self.keep_prob = tf.get_default_graph().get_tensor_by_name('dropout_keep_probability:0')
+
+            self.models = [tf.get_default_graph().get_tensor_by_name(n.name.split('/')[-1] + ':0')
+                                                     for n in tf.get_default_graph().as_graph_def().node
+                                                     if 'dense_model_' in n.name]
+
+            self.abstraction_activation_functions = []
+
+            for model in self.models:
+
+                model_function = 'abstraction_{}'.format(model.name.split('_')[-1].split(':')[0])
+
+                self.abstraction_activation_functions.append([n.name
+                                                         for n in tf.all_variables()
+                                                         if model_function in n.name.split('/')[-1] and
+                                                            'layer_' in n.name.split('/')[-1]])
 
     def build(self, n_input_features, n_outputs, abstraction_activation_functions,
                  n_hidden_layers, n_hidden_nodes, keep_probability, initialization,
-                 optimizer_algorithms, cost_function, add_summaries,
-                 batch_normalization):
-
-        print('Building model')
+                 optimizer_algorithms, cost_function='softmax_cross_entropy', add_summaries=True,
+                 batch_normalization=True):
 
         self.init( n_input_features, n_outputs, abstraction_activation_functions,
                  n_hidden_layers, n_hidden_nodes, keep_probability, initialization,
@@ -195,6 +203,8 @@ class DenseConvDense(object):
         self.raw_input = tf.placeholder(tf.float32, shape=(None, self.n_input_features), name='raw_input')
 
         self.expected_output = tf.placeholder(tf.float32, shape=(None, self.n_outputs), name='expected_output')
+
+        self.keep_prob = tf.placeholder(tf.float32, name='dropout_keep_probability')
 
         with tf.name_scope('abstraction_layer'):
 
@@ -222,12 +232,17 @@ class DenseConvDense(object):
 
                             b = tf.Variable(tf.truncated_normal([self.n_hidden_nodes], stddev=.1), name=bias_name)
 
+                            abstraction_layer_name = 'abstraction_{}_layer_{}'.format(activation_function, j + 1)
+
                             self.abstract_representation[i][j] = \
-                                tf.nn.dropout(af(tf.add(tf.matmul(previous_layer, w), b)), self.keep_prob)
+                                tf.nn.dropout(af(tf.add(tf.matmul(previous_layer, w), b)), self.keep_prob,
+                                              name=abstraction_layer_name if not self.batch_normalization
+                                              else 'dropout_{}_{}'.format(activation_function, j + 1))
 
                             if self.batch_normalization:
-                                bn_name = 'bn_{}_h{}{}'.format(activation_function, i + 1, j + 1)
-                                self.abstract_representation[i][j] = tf.layers.batch_normalization(self.abstract_representation[i][j], name=bn_name)
+                                self.abstract_representation[i][j] = \
+                                    tf.layers.batch_normalization(self.abstract_representation[i][j],
+                                                                  name=abstraction_layer_name)
 
                             previous_layer, previous_layer_size = self.abstract_representation[i][j], self.n_hidden_nodes
 
@@ -246,7 +261,9 @@ class DenseConvDense(object):
 
                         b = tf.Variable(tf.truncated_normal([self.n_outputs], stddev=.1), name=bias_name)
 
-                        self.models[i] = tf.add(tf.matmul(previous_layer, w), b)
+                        dense_name = 'dense_model_{}'.format(activation_function)
+
+                        self.models[i] = tf.add(tf.matmul(previous_layer, w), b, name=dense_name)
 
                         if self.add_summaries:
                             util.create_tf_scalar_summaries(w, 'weights')
@@ -258,6 +275,9 @@ class DenseConvDense(object):
     def build_optimizers(self):
 
         print('Building optimizers')
+
+        if self.lr is None:
+            self.lr = tf.placeholder(tf.float32, name='learning_rate')
 
         self.confusion_update = []
 
