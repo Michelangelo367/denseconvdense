@@ -26,6 +26,8 @@ class DenseConvDense(object):
 
         self.model_name = model_name
 
+        self.phase = None
+
     def init(self,  n_input_features, n_outputs, abstraction_activation_functions=('sigmoid', 'tanh', 'relu'),
              n_hidden_layers=3, n_hidden_nodes=10, keep_probability=0.5, initialization='RBM',
              optimizer_algorithms=('sgd', 'sgd', 'sgd'), cost_function='softmax_cross_entropy', add_summaries=True,
@@ -48,6 +50,8 @@ class DenseConvDense(object):
         self.n_hidden_layers = n_hidden_layers
 
         self.keep_probability = keep_probability
+
+        self.phase = tf.placeholder(tf.bool, name='phase_ph')
 
         self.n_outputs = n_outputs
 
@@ -123,7 +127,7 @@ class DenseConvDense(object):
 
         self.sess.run(tf.local_variables_initializer())
 
-        test_writer = tf.summary.FileWriter(self.summaries_dir + '/{}'.format(self.model_name))
+        test_writer = tf.summary.FileWriter(self.summaries_dir + '/{}'.format(self.model_name), tf.get_default_graph())
 
         n_rows = x.shape[0]
 
@@ -144,14 +148,14 @@ class DenseConvDense(object):
 
                 self.sess.run([self.merged] + self.optimizers,
                               feed_dict={self.raw_input: x[index[batch], :], self.expected_output: y[index[batch], :],
-                                         self.keep_prob: self.keep_probability, self.lr: learning_rate})
+                                         self.keep_prob: self.keep_probability, self.lr: learning_rate, self.phase: True})
 
                 current_block += batch_size
 
                 j += 1
 
             test_results = self.sess.run([self.merged] + self.accuracies + self.confusion_update,
-                                    feed_dict={self.raw_input: x_test, self.expected_output: y_test, self.keep_prob: 1.})
+                                    feed_dict={self.raw_input: x_test, self.expected_output: y_test, self.keep_prob: 1., self.phase: False})
 
             self.saver.save(self.sess, '../output/{0}/{0}'.format(self.model_name), global_step=step)
 
@@ -159,7 +163,7 @@ class DenseConvDense(object):
                 test_writer.add_summary(test_results[0], step)
 
     def predict(self, x):
-         return self.sess.run(self.abstraction_activation_functions, feed_dict={self.raw_input: x})
+         return self.sess.run(self.abstraction_activation_functions, feed_dict={self.raw_input: x, self.keep_prob: 1., self.phase: False})
 
     def load(self, model_path):
 
@@ -175,27 +179,28 @@ class DenseConvDense(object):
 
             self.keep_prob = tf.get_default_graph().get_tensor_by_name('dropout_keep_probability:0')
 
-            self.models = [tf.get_default_graph().get_tensor_by_name(n.name.split('/')[-1] + ':0')
-                                                     for n in tf.get_default_graph().as_graph_def().node
-                                                     if 'dense_model_' in n.name]
+            self.phase = tf.get_default_graph().get_tensor_by_name('phase_ph:0')
+
+            self.models = [tf.get_default_graph().get_tensor_by_name(n.name +':0') for n in tf.get_default_graph().get_operations()
+                           if 'dense_model_' in n.name.split('/')[-1]]
 
             self.abstraction_activation_functions = []
 
             for model in self.models:
 
-                model_function = 'abstraction_{}'.format(model.name.split('_')[-1].split(':')[0])
+                model_function = 'abstraction_{}_layer_'.format(model.name.split('_')[-1].split(':')[0])
 
-                self.abstraction_activation_functions.append([n.name
-                                                         for n in tf.all_variables()
-                                                         if model_function in n.name.split('/')[-1] and
-                                                            'layer_' in n.name.split('/')[-1]])
+                self.abstraction_activation_functions.append([tf.get_default_graph().get_tensor_by_name(op.name + ':0') for op in tf.get_default_graph().get_operations()
+                                                              if 'batchnorm' in op.name and 'grad' not in op.name and model_function in op.name and 'add_1' in op.name])
+
+
 
     def build(self, n_input_features, n_outputs, abstraction_activation_functions,
                  n_hidden_layers, n_hidden_nodes, keep_probability, initialization,
                  optimizer_algorithms, cost_function='softmax_cross_entropy', add_summaries=True,
                  batch_normalization=True):
 
-        self.init( n_input_features, n_outputs, abstraction_activation_functions,
+        self.init(n_input_features, n_outputs, abstraction_activation_functions,
                  n_hidden_layers, n_hidden_nodes, keep_probability, initialization,
                  optimizer_algorithms, cost_function, add_summaries,
                  batch_normalization)
@@ -241,7 +246,7 @@ class DenseConvDense(object):
 
                             if self.batch_normalization:
                                 self.abstract_representation[i][j] = \
-                                    tf.layers.batch_normalization(self.abstract_representation[i][j],
+                                    tf.layers.batch_normalization(self.abstract_representation[i][j], training=self.phase,
                                                                   name=abstraction_layer_name)
 
                             previous_layer, previous_layer_size = self.abstract_representation[i][j], self.n_hidden_nodes
@@ -322,9 +327,9 @@ class DenseConvDense(object):
                                                           num_classes=self.n_outputs,
                                                           name='batch_confusion')
 
-                    confusion = tf.Variable(tf.zeros([self.n_outputs, self.n_outputs],
-                                                     dtype=tf.int32),
-                                            name='confusion_var_{}'.format(activation_function))
+                    confusion = tf.Variable(
+                        tf.zeros([self.n_outputs, self.n_outputs],
+                        dtype=tf.int32), name='confusion_var_{}'.format(activation_function))
 
                     self.confusion_update += [confusion.assign(batch_confusion)]
 

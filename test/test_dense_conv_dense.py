@@ -1,5 +1,6 @@
 import unittest
 import pandas as pd
+import numpy as np
 
 from model import DenseConvDense
 
@@ -22,6 +23,7 @@ class TestDenseConvDense(unittest.TestCase):
 
         self.model.build(n_input_features=self.train_x.shape[1], n_outputs=self.train_y.shape[1],
                          abstraction_activation_functions=('sigmoid', 'tanh', 'relu'),
+                         n_hidden_layers=3, optimizer_algorithms=('sgd', 'sgd', 'sgd'),
                          n_hidden_nodes=100, keep_probability=0.5, initialization='RBM',
                          batch_normalization=True)
 
@@ -31,4 +33,8 @@ class TestDenseConvDense(unittest.TestCase):
 
         self.model = DenseConvDense()
 
-        self.model.load('../output/model/M0001/M0003-999')
+        self.model.load('../output/M0010/M0000-110')
+
+        x = np.random.rand(1,784)
+
+        print(np.array_str(np.array(self.model.predict(x)), precision=2))
