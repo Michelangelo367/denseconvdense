@@ -9,7 +9,13 @@ create better models.
 
 | **ID**   | **Dataset**       | **Hidden Layers** | **Neurons per Layer** | **Models**          | **Output Function** | **Iterations** | **Batch Size** |Learning Rate | Batch Normalization | Dropout Input | Dropout Hidden | Batch Shuffle | L1  | L2  | Data Normalization |
 |:--------:|:-----------------:|------------------:|----------------------:|:-------------------:|:-------------------:|---------------:|:--------------:|:------------:|:-------------------:|--------------:|:--------------:|:-------------:|:---:|:---:|:------------------:|
-| M0001    | MNIST from Kaggle | 3                 | 100                   | sigmoid, tanh, relu | identity            | 1000           | 1000           | 1e-5         | Yes                 | 0.5           | 0.5            | Yes           | No  | No  | No                 |
+| M0000    | MNIST from Kaggle | 3                 | 100                   | sigmoid, tanh, relu | identity            | 1000           | 1000           | 1e-5         | Yes                 | 0.5           | 0.5            | Yes           | No  | No  | No                 |
+
+#### Convolution Layer
+
+| **ID**   | **Abstraction Layer** | **Iterations** | **Batch Size** |Learning Rate | Batch Normalization | Dropout Input | Dropout Hidden | Batch Shuffle | L1  | L2  | Data Normalization |
+|:--------:|:---------------------:|---------------:|:--------------:|:------------:|--------------------:|:-------------:|:--------------:|:-------------:|----:|:---:|:------------------:|
+| C0000    | M0000                 | 50             | 1000           | .5           | No                  | 0.5           | 0.5            | Yes           | No  | No  | No                 |
 
 ### References
 

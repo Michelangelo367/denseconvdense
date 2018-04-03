@@ -1,1 +1,2 @@
-from model.denseconvdense import *
+from model.dense import *
+from model.convdense import ConvDense
