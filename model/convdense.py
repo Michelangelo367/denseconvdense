@@ -104,7 +104,7 @@ class ConvDense:
                 print(self.pool3.shape)
 
             with tf.name_scope('dense_layer'):
-                self.fc1 = tf.layers.dense(tf.reshape(self.pool3, (-1, 6 * 256)), 1024, name='dense1', activation=tf.nn.tanh)
+                self.fc1 = tf.layers.dense(tf.reshape(self.pool3, (-1, 16 * 256)), 1024, name='dense1', activation=tf.nn.tanh)
                 self.fc1 = tf.layers.dropout(self.fc1, rate=self.keep_prob, training=self.training)
 
                 self.fc2 = tf.layers.dense(self.fc1, 1024, name='dense2', activation=tf.nn.tanh)
@@ -123,8 +123,7 @@ class ConvDense:
 
             with tf.name_scope('optimization_vgg19'):
 
-                self.cost_function = tf.losses.hinge_loss(labels=self.expected_output, logits=self.fc) + \
-                                     tf.losses.huber_loss(labels=self.expected_output, predictions=self.fc)
+                self.cost_function = tf.losses.huber_loss(labels=self.expected_output, predictions=self.fc)
 
                 self.optimizer = tf.train.AdagradOptimizer(learning_rate=self.lr).minimize(self.cost_function)
 

@@ -1,33 +1,25 @@
-from model import Dense, ConvDense
-
+from model import Dense
+import numpy as np
 import pandas as pd
 #
 # Loading train dataset
 #
-train = pd.read_table('../input/mnist/train.csv', sep=',')
-train_x = train.iloc[:, 1:].as_matrix().astype(float)
-train_y = pd.get_dummies(train.iloc[:, 0]).as_matrix().astype(int)
+test = pd.read_table('../input/mnist/test.csv', sep=',')
+test_x = test.as_matrix().astype(float)
 
 #
-# Training
+# Predict
 #
 
 abstraction_layer = Dense()
 abstraction_layer.load('../output/model/M0000/M0000-999')
 
-conv_dense = ConvDense(abstraction_layer=abstraction_layer,
-                       model_name='C0000-banchmark-mnist', summaries_dir=None)
-conv_dense.load('../output/test/C0000-banchmark-mnist-103')
+y_hat = abstraction_layer.predict__(test_x)
 
-#
-# Predicting
-#
-test = pd.read_table('../input/mnist/test.csv', sep=',')
-test_x = test.as_matrix().astype(float)
-y_hat = conv_dense.predict(test_x)
-#
-# Exporting
-#
+print(y_hat.shape)
 
-result = pd.DataFrame({'ImageId': list(range(1, len(y_hat) + 1)), 'Label': y_hat})
-result.to_csv('../output/banchmark/mnist/M0000-C0000-modified-adagrad-1000step.csv', sep=',', index=False)
+for index, model in enumerate(y_hat):
+    r = np.argmax(model, 1)
+    print(r.shape)
+    result = pd.DataFrame({'ImageId': list(range(1, len(r) + 1)), 'Label': r})
+    result.to_csv('../output/benchmark/mnist/M0000-sgd-1000steps-{}.csv'.format(['sigmoid', 'tanh', 'relu'][index]), sep=',', index=False)
