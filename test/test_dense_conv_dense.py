@@ -1,8 +1,7 @@
 import unittest
 import pandas as pd
-import numpy as np
 
-from model import Dense, ConvDense
+from model import Dense, ConvDense, ConvDense2
 
 
 class TestDenseConvDense(unittest.TestCase):
@@ -53,6 +52,29 @@ class TestDenseConvDense(unittest.TestCase):
 
         self.conv = ConvDense(model_name=model_name)
         self.conv.build(n_models=3, n_neurons_per_layer=256)
+
+        self.conv.optimize(x=self.train_x, y=self.train_y, x_test=self.train_x[38000:,:], y_test=self.train_y[38000:,:],
+                           learning_rate=.25, steps=50, batch_size=1000)
+
+        y = self.conv.predict(self.test_x)
+
+        pd.DataFrame({'ImageId': list(range(1, len(y) + 1)), 'Label': y}).to_csv(
+            '../output/{}.csv'.format(model_name), sep=',', index=False)
+
+    def test_conv_dense2(self):
+
+        self.model = Dense()
+        self.model.load('../output/M0512/M0512-999')
+
+        self.train_x = self.model.predict(self.train_x).reshape((-1, 3, 512, 3, 1))
+        self.test_x = self.model.predict(self.test_x).reshape((-1, 3, 512, 3, 1))
+
+        del self.model
+
+        model_name = 'C0512-2-adagrad-huber-50steps-2000bs'
+
+        self.conv = ConvDense2(model_name=model_name)
+        self.conv.build(n_models=3, n_neurons_per_layer=512)
 
         self.conv.optimize(x=self.train_x, y=self.train_y, x_test=self.train_x[38000:,:], y_test=self.train_y[38000:,:],
                            learning_rate=.25, steps=50, batch_size=1000)
