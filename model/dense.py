@@ -16,7 +16,8 @@ class Dense(object):
     VALID_ACTIVATION_FUNCTIONS = {'sigmoid': tf.nn.sigmoid, 'tanh': tf.nn.tanh, 'relu': tf.nn.relu}
 
     VALID_OPTIMIZERS = {'sgd': tf.train.GradientDescentOptimizer, 'ftrl': tf.train.FtrlOptimizer,
-                        'adam': tf.train.AdamOptimizer, 'adadelta': tf.train.AdadeltaOptimizer}
+                        'adam': tf.train.AdamOptimizer, 'adadelta': tf.train.AdadeltaOptimizer,
+                        'adagrad': tf.train.AdagradOptimizer, 'rmsprop': tf.train.RMSPropOptimizer}
 
     VALID_COST_FUNCTIONS = ('softmax_cross_entroy')
 
@@ -147,6 +148,8 @@ class Dense(object):
             j = 0
 
             for step in range(steps):
+
+                print('Optimization at step {}'.format(step + 1))
 
                 current_block = 0
 
@@ -336,7 +339,7 @@ class Dense(object):
 
                         self.cost_functions[i] = tf.nn.softmax_cross_entropy_with_logits(labels=self.expected_output, logits=model)
 
-                        self.optimizers[i] = self.VALID_OPTIMIZERS[optimizer](self.lr).minimize(self.cost_functions[i])
+                        self.optimizers[i] = self.VALID_OPTIMIZERS[optimizer](learning_rate=self.lr).minimize(self.cost_functions[i])
 
                         if self.add_summaries:
                             tf.summary.scalar('cross_entropy_{}'.format(activation_function), tf.reduce_mean(self.cost_functions[i]))

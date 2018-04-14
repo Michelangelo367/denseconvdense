@@ -64,50 +64,50 @@ class ConvDense:
             self.input = tf.placeholder(tf.float32, shape=(None, n_models, n_neurons_per_layer, n_layers, 1), name='input')
 
             with tf.name_scope('conv1'):
-                self.conv1_1 = tf.layers.conv3d(inputs=self.input, filters=2, kernel_size=[3, 8, 1], strides=1, padding='same', name="conv1_1",
+                self.conv1_1 = tf.layers.conv3d(inputs=self.input, filters=16, kernel_size=[3, 8, 1], strides=1, padding='same', name="conv1_1",
                                                 activation=tf.nn.relu)
                 print(self.conv1_1.shape)
 
-                self.conv1_2 = tf.layers.conv3d(self.conv1_1, filters=4, kernel_size=[3, 8, 2], strides=1, padding='same', name="conv1_2",
+                self.conv1_2 = tf.layers.conv3d(self.conv1_1, filters=32, kernel_size=[3, 8, 2], strides=1, padding='same', name="conv1_2",
                                                 activation=tf.nn.relu)
                 print(self.conv1_2.shape)
 
-                self.conv1_3 = tf.layers.conv3d(self.conv1_2, filters=16, kernel_size=[3, 8, 3], strides=1, padding='same', name="conv1_3",
+                self.conv1_3 = tf.layers.conv3d(self.conv1_2, filters=64, kernel_size=[3, 8, 3], strides=1, padding='same', name="conv1_3",
                                                 activation=tf.nn.relu)
                 print(self.conv1_3.shape)
 
-                self.pool1 = tf.layers.average_pooling3d(self.conv1_3, pool_size=[1, 4, 1], strides=[1, 4, 1], name='pool1')
+                self.pool1 = tf.layers.max_pooling3d(self.conv1_3, pool_size=[1, 4, 1], strides=[1, 4, 1], name='pool1')
                 print(self.pool1.shape)
 
             with tf.name_scope('conv2'):
-                self.conv2_1 = tf.layers.conv3d(inputs=self.pool1, filters=32, kernel_size=[3, 8, 1],
-                                                padding='same', name="conv2_1", activation=tf.nn.tanh)
+                self.conv2_1 = tf.layers.conv3d(inputs=self.pool1, filters=128, kernel_size=[3, 8, 1],
+                                                padding='same', name="conv2_1", activation=tf.nn.relu)
                 print(self.conv2_1.shape)
 
-                self.conv2_2 = tf.layers.conv3d(self.conv2_1, filters=64, kernel_size=[3, 8, 2], padding='same', name="conv2_2",
+                self.conv2_2 = tf.layers.conv3d(self.conv2_1, filters=256, kernel_size=[3, 8, 2], padding='same', name="conv2_2",
                                                 activation=tf.nn.relu)
                 print(self.conv2_2.shape)
 
-                self.pool2 = tf.layers.average_pooling3d(self.conv2_2, pool_size=[2, 2, 1], strides=[1, 2, 1], name='pool2')
+                self.pool2 = tf.layers.max_pooling3d(self.conv2_2, pool_size=[2, 2, 1], strides=[1, 2, 1], name='pool2')
                 print(self.pool2.shape)
 
             with tf.name_scope('conv3'):
-                self.conv3_1 = tf.layers.conv3d(inputs=self.pool2, filters=128, kernel_size=[2, 2, 1],
+                self.conv3_1 = tf.layers.conv3d(inputs=self.pool2, filters=512, kernel_size=[2, 2, 1],
                                                 padding='same', name="conv3_1", activation=tf.nn.relu)
                 print(self.conv3_1.shape)
 
-                self.conv3_2 = tf.layers.conv3d(self.conv3_1, filters=256, kernel_size=[2, 2, 2],
+                self.conv3_2 = tf.layers.conv3d(self.conv3_1, filters=512, kernel_size=[2, 2, 2],
                                                 padding='same', name="conv3_2", activation=tf.nn.relu)
                 print(self.conv3_2.shape)
 
-                self.pool3 = tf.layers.average_pooling3d(self.conv3_2, pool_size=[2, 2, 2], strides=[2, 2, 2], name='pool3')
+                self.pool3 = tf.layers.max_pooling3d(self.conv3_2, pool_size=[2, 8, 2], strides=[2, 8, 2], name='pool3')
                 print(self.pool3.shape)
 
             with tf.name_scope('dense_layer'):
-                self.fc1 = tf.layers.dense(tf.reshape(self.pool3, (-1, 16 * 256)), 1024, name='dense1', activation=tf.nn.tanh)
+                self.fc1 = tf.layers.dense(tf.reshape(self.pool3, (-1, 8 * 512)), 1024, name='dense1', activation=tf.nn.relu)
                 self.fc1 = tf.layers.dropout(self.fc1, rate=self.keep_prob, training=self.training)
 
-                self.fc2 = tf.layers.dense(self.fc1, 1024, name='dense2', activation=tf.nn.tanh)
+                self.fc2 = tf.layers.dense(self.fc1, 1024, name='dense2', activation=tf.nn.relu)
                 self.fc2 = tf.layers.dropout(self.fc2, rate=self.keep_prob, training=self.training)
 
                 self.fc = tf.layers.dense(self.fc2, 10, name='output', activation=tf.nn.softmax)
