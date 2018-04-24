@@ -5,6 +5,10 @@ import os
 
 class ConvDense:
 
+    VALID_OPTIMIZERS = {'sgd': tf.train.GradientDescentOptimizer, 'ftrl': tf.train.FtrlOptimizer,
+                        'adam': tf.train.AdamOptimizer, 'adadelta': tf.train.AdadeltaOptimizer,
+                        'adagrad': tf.train.AdagradOptimizer, 'rmsprop': tf.train.RMSPropOptimizer}
+
     def __init__(self, abstraction_layer=None, session=None, model_name='C0000', summaries_dir='../log'):
 
         self.graph = tf.Graph()
@@ -104,7 +108,9 @@ class ConvDense:
                 print(self.pool3.shape)
 
             with tf.name_scope('dense_layer'):
-                self.fc1 = tf.layers.dense(tf.reshape(self.pool3, (-1, 8 * 512)), 1024, name='dense1', activation=tf.nn.relu)
+                _, w, x, y, z = self.pool3.shape
+
+                self.fc1 = tf.layers.dense(tf.reshape(self.pool3, (-1, w * x * y * z)), 1024, name='dense1', activation=tf.nn.relu)
                 self.fc1 = tf.layers.dropout(self.fc1, rate=self.keep_prob, training=self.training)
 
                 self.fc2 = tf.layers.dense(self.fc1, 1024, name='dense2', activation=tf.nn.relu)
@@ -125,7 +131,7 @@ class ConvDense:
 
                 self.cost_function = tf.losses.huber_loss(labels=self.expected_output, predictions=self.fc)
 
-                self.optimizer = tf.train.AdagradOptimizer(learning_rate=self.lr).minimize(self.cost_function)
+                self.optimizer = self.VALID_OPTIMIZERS[self.optimizer_algorithm](learning_rate=self.lr).minimize(self.cost_function)
 
                 if self.add_summaries:
                     tf.summary.scalar('cross_entropy_vgg19', tf.reduce_mean(self.cost_function))
