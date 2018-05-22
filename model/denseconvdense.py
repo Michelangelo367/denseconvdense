@@ -326,9 +326,6 @@ class DenseConvDense(Model):
 
             j = 0
 
-            if self.abstraction_layer is not None:
-                x_test = self.abstraction_layer.predict(x_test)
-
             for step in range(steps):
 
                 print('Step {} of {}'.format(step + 1, steps))
@@ -376,9 +373,6 @@ class DenseConvDense(Model):
 
         result = None
 
-        if self.abstraction_layer is not None:
-            x = self.abstraction_layer.predict(x)
-
         with self.graph.as_default():
 
             for rows in np.split(x, np.ceil(x.shape[0] / 1000)):
@@ -386,25 +380,3 @@ class DenseConvDense(Model):
                 result = tmp if result is None else np.concatenate((result, tmp), axis=0)
 
         return result
-
-    def load(self, model_path):
-        #
-        # FIXME It should be tested
-        #
-        if os.path.exists('{}.meta'.format(model_path)) and os.path.isfile('{}.meta'.format(model_path)):
-
-            with self.graph.as_default():
-
-                self.saver = tf.train.import_meta_graph('{}.meta'.format(model_path))
-
-                self.saver.restore(self.sess, tf.train.latest_checkpoint(os.path.dirname(model_path)))
-
-                self.input = tf.get_default_graph().get_tensor_by_name('input:0')
-
-                self.expected_output = tf.get_default_graph().get_tensor_by_name('expected_output:0')
-
-                self.keep_prob = tf.get_default_graph().get_tensor_by_name('keep_probability_ph:0')
-
-                self.training = tf.get_default_graph().get_tensor_by_name('training_ph:0')
-
-                self.fc = tf.get_default_graph().get_tensor_by_name('output:0')

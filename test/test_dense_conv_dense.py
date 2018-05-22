@@ -120,13 +120,12 @@ class TestDenseConvDense(unittest.TestCase):
 
             model_name = 'dense_conv_dense_test_01'
 
-            self.model = DenseConvDense()
+            self.model = DenseConvDense(model_name=model_name)
 
             self.model.build(train_x.shape[1], train_y.shape[1])
 
-            self.model.optimize(x=self.train_x, y=train_y, x_test=train_x[41000:, :],
-                               y_test=self.train_y[41000:, :],
-                               learning_rate=.25, steps=50, batch_size=500)
+            self.model.optimize(x=self.train_x, y=train_y, x_test=test_x, y_test=test_y,
+                               learning_rate=.25, steps=50, batch_size=25)
 
             y_hat = self.model.predict(test_x)
 
