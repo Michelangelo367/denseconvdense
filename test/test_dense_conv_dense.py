@@ -1,7 +1,7 @@
 import unittest
 import pandas as pd
 
-from model import Dense, ConvDense, ConvDense2
+from model import *
 
 
 class TestDenseConvDense(unittest.TestCase):
@@ -82,3 +82,22 @@ class TestDenseConvDense(unittest.TestCase):
 
         pd.DataFrame({'ImageId': list(range(1, len(y) + 1)), 'Label': y}).to_csv(
             '../output/{}.csv'.format(model_name), sep=',', index=False)
+
+    def test_dense_conv_dense(self):
+
+        model_name = 'dense_conv_dense_test_01'
+
+        self.model = DenseConvDense()
+
+        self.model.build(self.train_x.shape[1], self.train_y.shape[1])
+
+        self.conv.optimize(x=self.train_x, y=self.train_y, x_test=self.train_x[41000:, :],
+                           y_test=self.train_y[41000:, :],
+                           learning_rate=.25, steps=50, batch_size=500)
+
+        y = self.conv.predict(self.test_x)
+
+        pd.DataFrame({'ImageId': list(range(1, len(y) + 1)), 'Label': y}).to_csv(
+            '../output/{}.csv'.format(model_name), sep=',', index=False)
+
+

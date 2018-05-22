@@ -3,8 +3,47 @@ import numpy as np
 import os
 
 
-class ConvDense:
+class Model(object):
 
+    def get_activation_function(self, name):
+
+        if name == 'sigmoid':
+            return tf.nn.sigmoid
+
+        elif name == 'tanh':
+            return tf.nn.tanh
+
+        elif name == 'softmax':
+            return tf.nn.softmax
+
+        elif name == 'log_softmax':
+            return tf.nn.log_softmax
+
+        else:
+            return tf.nn.relu
+
+    def get_optimizer(self, name):
+
+        if name == 'adagrad':
+            return tf.train.AdagradOptimizer
+
+        elif name == 'adam':
+            return tf.train.AdamOptimizer
+
+        elif name == 'ftrl':
+            return tf.train.FtrlOptimizer
+
+        elif name == 'adadelta':
+            return tf.train.AdadeltaOptimizer
+
+        else:
+            return tf.train.GradientDescentOptimizer
+
+
+class DenseConvDense(Model):
+    """
+
+    """
     def __init__(self, abstraction_layer=None, session=None, model_name='C0000', summaries_dir='../log'):
 
         self.graph = tf.Graph()
@@ -42,16 +81,45 @@ class ConvDense:
         #
         self.correct_prediction = None
 
-    def build(self, n_models=3, n_neurons_per_layer=100, n_layers=3, n_outputs=10, optimizer_algorithm='sgd', keep_probability=0.5):
+    def build(self,
+              n_features,
+              n_outputs=10,
+              abstraction_activation_functions=('relu', 'tanh', 'sigmoid'),
+              abstraction_n_hidden_layers=3,
+              abstraction_n_neurons_per_hidden_layer=128,
+              processing_n_hidden_layers=3,
+              processing_n_neurons_per_hidden_layer=1024,
+              processing_activation_function='relu',
+              output_activation_function='softmax',
+              optimizer_algorithm='adagrad',
+              keep_probability=0.5):
+        """
 
+        :param abstraction_activation_functions:
+        :param abstraction_hidden_layers:
+        :param abstraction_neurons_per_hidden_layer:
+        :param processing_hidden_layers:
+        :param processing_output_neurons:
+        :param processing_activation_function:
+        :param optimizer_algorithm:
+        :param keep_probability:
+        :return:
+        """
         with self.graph.as_default():
             #
             #
             #
+            self.n_features = self.n_outputs = n_outputs
             self.n_outputs = n_outputs
-            self.n_models = n_models
-            self.n_neurons_per_layer = n_neurons_per_layer
-            self.n_layers = n_layers
+
+            self.abstraction_activation_functions = abstraction_activation_functions
+            self.abstraction_n_hidden_layers = abstraction_n_hidden_layers
+            self.abstraction_n_neurons_per_hidden_layer = abstraction_n_neurons_per_hidden_layer
+
+            self.processing_n_hidden_layers = processing_n_hidden_layers
+            self.processing_n_neurons_per_hidden_layer = processing_n_neurons_per_hidden_layer
+            self.processing_activation_function = processing_activation_function
+
             self.keep_probability = keep_probability
             self.optimizer_algorithm = optimizer_algorithm
 
@@ -61,56 +129,113 @@ class ConvDense:
             self.keep_prob = tf.placeholder(tf.float32, name='keep_probability_ph')
             self.training = tf.placeholder(tf.bool, name='training_ph')
 
-            self.input = tf.placeholder(tf.float32, shape=(None, n_models, n_neurons_per_layer, n_layers, 1), name='input')
+            self.input = tf.placeholder(tf.float32, shape=(None, n_features), name='input')
 
-            with tf.name_scope('conv1'):
-                self.conv1_1 = tf.layers.conv3d(inputs=self.input, filters=2, kernel_size=[3, 8, 1], strides=1, padding='same', name="conv1_1",
-                                                activation=tf.nn.relu)
-                print(self.conv1_1.shape)
+            with tf.name_scope('abstraction_layer'):
 
-                self.conv1_2 = tf.layers.conv3d(self.conv1_1, filters=4, kernel_size=[3, 8, 2], strides=1, padding='same', name="conv1_2",
-                                                activation=tf.nn.relu)
-                print(self.conv1_2.shape)
+                fc, abstraction_stack = None, []
 
-                self.conv1_3 = tf.layers.conv3d(self.conv1_2, filters=16, kernel_size=[3, 8, 3], strides=1, padding='same', name="conv1_3",
-                                                activation=tf.nn.relu)
-                print(self.conv1_3.shape)
+                for i, af in enumerate(self.abstraction_activation_functions):
 
-                self.pool1 = tf.layers.average_pooling3d(self.conv1_3, pool_size=[1, 4, 1], strides=[1, 4, 1], name='pool1')
-                print(self.pool1.shape)
+                    fc = self.input
 
-            with tf.name_scope('conv2'):
-                self.conv2_1 = tf.layers.conv3d(inputs=self.pool1, filters=32, kernel_size=[3, 8, 1],
-                                                padding='same', name="conv2_1", activation=tf.nn.tanh)
-                print(self.conv2_1.shape)
+                    abstraction_stack.append([])
 
-                self.conv2_2 = tf.layers.conv3d(self.conv2_1, filters=64, kernel_size=[3, 8, 2], padding='same', name="conv2_2",
-                                                activation=tf.nn.relu)
-                print(self.conv2_2.shape)
+                    for j in range(self.abstraction_n_hidden_layers):
 
-                self.pool2 = tf.layers.average_pooling3d(self.conv2_2, pool_size=[2, 2, 1], strides=[1, 2, 1], name='pool2')
-                print(self.pool2.shape)
+                        layer_name = 'abstraction_layer_{}_{}'.format(af[:4], j + 1)
 
-            with tf.name_scope('conv3'):
-                self.conv3_1 = tf.layers.conv3d(inputs=self.pool2, filters=128, kernel_size=[2, 2, 1],
-                                                padding='same', name="conv3_1", activation=tf.nn.relu)
-                print(self.conv3_1.shape)
+                        fc = tf.layers.dense(fc, self.abstraction_n_neurons_per_hidden_layer,
+                                             name=layer_name, activation=self.get_activation_function(af))
 
-                self.conv3_2 = tf.layers.conv3d(self.conv3_1, filters=256, kernel_size=[2, 2, 2],
-                                                padding='same', name="conv3_2", activation=tf.nn.relu)
-                print(self.conv3_2.shape)
+                        if self.keep_prob is not None:
+                            fc = tf.layers.dropout(fc, name='dropout_{}'.format(layer_name),
+                                                   rate=self.keep_prob, training=self.training)
 
-                self.pool3 = tf.layers.average_pooling3d(self.conv3_2, pool_size=[2, 2, 2], strides=[2, 2, 2], name='pool3')
-                print(self.pool3.shape)
+                        abstraction_stack[i].append(fc)
 
-            with tf.name_scope('dense_layer'):
-                self.fc1 = tf.layers.dense(tf.reshape(self.pool3, (-1, 6 * 256)), 1024, name='dense1', activation=tf.nn.tanh)
-                self.fc1 = tf.layers.dropout(self.fc1, rate=self.keep_prob, training=self.training)
+                for i in range(len(abstraction_stack)):
+                    abstraction_stack[i] = tf.stack(abstraction_stack[i], 0)
 
-                self.fc2 = tf.layers.dense(self.fc1, 1024, name='dense2', activation=tf.nn.tanh)
-                self.fc2 = tf.layers.dropout(self.fc2, rate=self.keep_prob, training=self.training)
+                abstraction_stack = tf.stack(abstraction_stack, 2)
 
-                self.fc = tf.layers.dense(self.fc2, 10, name='output', activation=tf.nn.softmax)
+                self.abstraction_layer = tf.expand_dims(tf.transpose(abstraction_stack, [1, 0, 3, 2]), axis=4)
+
+            with tf.name_scope('convolutional_layer'):
+
+                with tf.name_scope('conv1'):
+
+                    self.conv1_1 = tf.layers.conv3d(inputs=self.abstraction_layer, filters=2,
+                                                    kernel_size=[abstraction_n_hidden_layers, 8, 1],
+                                                    strides=1, padding='same', name="conv1_1", activation=tf.nn.relu)
+                    print(self.conv1_1.shape)
+
+                    self.conv1_2 = tf.layers.conv3d(inputs=self.conv1_1, filters=4,
+                                                    kernel_size=[abstraction_n_hidden_layers, 8, 2], strides=1,
+                                                    padding='same', name="conv1_2", activation=tf.nn.relu)
+                    print(self.conv1_2.shape)
+
+                    self.conv1_3 = tf.layers.conv3d(inputs=self.conv1_2, filters=16,
+                                                    kernel_size=[abstraction_n_hidden_layers, 8, 3], strides=1,
+                                                    padding='same', name="conv1_3", activation=tf.nn.relu)
+                    print(self.conv1_3.shape)
+
+                    self.pool1 = tf.layers.average_pooling3d(inputs=self.conv1_3, pool_size=[1, 4, 1],
+                                                             strides=[1, 4, 1], name='pool1')
+                    print(self.pool1.shape)
+
+                with tf.name_scope('conv2'):
+                    self.conv2_1 = tf.layers.conv3d(inputs=self.pool1, filters=32,
+                                                    kernel_size=[abstraction_n_hidden_layers, 8, 1],
+                                                    padding='same', name="conv2_1", activation=tf.nn.tanh)
+                    print(self.conv2_1.shape)
+
+                    self.conv2_2 = tf.layers.conv3d(inputs=self.conv2_1, filters=64,
+                                                    kernel_size=[abstraction_n_hidden_layers, 8, 2],
+                                                    padding='same', name="conv2_2", activation=tf.nn.relu)
+                    print(self.conv2_2.shape)
+
+                    self.pool2 = tf.layers.average_pooling3d(inputs=self.conv2_2, pool_size=[2, 2, 1],
+                                                             strides=[1, 2, 1], name='pool2')
+                    print(self.pool2.shape)
+
+                with tf.name_scope('conv3'):
+                    self.conv3_1 = tf.layers.conv3d(inputs=self.pool2, filters=128, kernel_size=[2, 2, 1],
+                                                    padding='same', name="conv3_1", activation=tf.nn.relu)
+                    print(self.conv3_1.shape)
+
+                    self.conv3_2 = tf.layers.conv3d(inputs=self.conv3_1, filters=256, kernel_size=[2, 2, 2],
+                                                    padding='same', name="conv3_2", activation=tf.nn.relu)
+                    print(self.conv3_2.shape)
+
+                    self.pool3 = tf.layers.average_pooling3d(inputs=self.conv3_2, pool_size=[2, 2, 2],
+                                                             strides=[2, 2, 2], name='pool3')
+                    print(self.pool3.shape)
+
+            with tf.name_scope('processing_layer'):
+
+                shape = 1
+
+                for i in self.pool3.shape[1:]:
+                    shape *= int(i)
+
+                fcp = tf.reshape(self.pool3, (-1, shape))
+
+                for i in range(processing_n_hidden_layers):
+
+                    layer_name = 'processing_hidden_layer_{}'.format(i + 1)
+
+                    fcp = tf.layers.dense(inputs=fcp,
+                                          units=processing_n_neurons_per_hidden_layer,
+                                          name=layer_name,
+                                          activation=self.get_activation_function(processing_activation_function))
+
+                    if self.keep_prob is not None:
+                        fcp = tf.layers.dropout(inputs=fcp, name='dropout_{}'.format(layer_name),
+                                                rate=self.keep_prob, training=self.training)
+
+                self.fc = tf.layers.dense(inputs=fcp, units=n_outputs, name='output_layer',
+                                          activation=self.get_activation_function(output_activation_function))
 
             self.saver = tf.train.Saver()
 
@@ -121,44 +246,43 @@ class ConvDense:
             self.expected_output = tf.placeholder(tf.int64, shape=(None, self.n_outputs), name='expected_output')
             self.lr = tf.placeholder(tf.float32, name='learning_rate_ph')
 
-            with tf.name_scope('optimization_vgg19'):
+            with tf.name_scope('optimization'):
 
-                self.cost_function = tf.losses.hinge_loss(labels=self.expected_output, logits=self.fc) + \
-                                     tf.losses.huber_loss(labels=self.expected_output, predictions=self.fc)
+                self.cost_function = tf.losses.huber_loss(labels=self.expected_output, predictions=self.fc)
 
-                self.optimizer = tf.train.AdagradOptimizer(learning_rate=self.lr).minimize(self.cost_function)
+                self.optimizer = self.get_optimizer(self.optimizer)(learning_rate=self.lr).minimize(self.cost_function)
 
                 if self.add_summaries:
-                    tf.summary.scalar('cross_entropy_vgg19', tf.reduce_mean(self.cost_function))
+                    tf.summary.scalar('cross_entropy', tf.reduce_mean(self.cost_function))
 
             #
             # TODO Add new performance metrics
             #
-            with tf.name_scope('evaluation_vgg19'):
+            with tf.name_scope('evaluation'):
 
-                with tf.name_scope('correct_prediction_vgg19'):
+                with tf.name_scope('correct_prediction'):
                     self.correct_prediction = tf.equal(tf.argmax(self.fc, 1), tf.argmax(self.expected_output, 1))
 
-                with tf.name_scope('accuracy_vgg19'):
+                with tf.name_scope('accuracy'):
                     self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
 
             if self.add_summaries:
-                tf.summary.scalar('accuracy_vgg19', self.accuracy)
+                tf.summary.scalar('accuracy', self.accuracy)
 
                 #
                 # Compute confusion matrix
                 #
-                with tf.name_scope('confusion_matrix_vgg19'):
+                with tf.name_scope('confusion_matrix'):
                     batch_confusion = tf.confusion_matrix(tf.argmax(self.expected_output, 1), tf.argmax(self.fc, 1), num_classes=10, name='batch_confusion')
 
                     confusion = tf.Variable(
-                        tf.zeros([10, 10], dtype=tf.int32), name='confusion_var_vgg19')
+                        tf.zeros([10, 10], dtype=tf.int32), name='confusion_var')
 
                     self.confusion_update = confusion.assign(batch_confusion)
 
                     confusion_image = tf.reshape(tf.cast(confusion, tf.float32), [1, 10, 10, 1])
 
-                    tf.summary.image('confusion_vgg19}', confusion_image)
+                    tf.summary.image('confusion', confusion_image)
 
                 #
                 # Create summary tensors
