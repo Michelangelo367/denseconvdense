@@ -1,6 +1,8 @@
 import unittest
 import pandas as pd
 
+from sklearn.model_selection import KFold
+from sklearn.metrics import roc_auc_score, accuracy_score
 from model import *
 
 
@@ -91,13 +93,53 @@ class TestDenseConvDense(unittest.TestCase):
 
         self.model.build(self.train_x.shape[1], self.train_y.shape[1])
 
-        self.conv.optimize(x=self.train_x, y=self.train_y, x_test=self.train_x[41000:, :],
+        self.model.optimize(x=self.train_x, y=self.train_y, x_test=self.train_x[41000:, :],
                            y_test=self.train_y[41000:, :],
                            learning_rate=.25, steps=50, batch_size=500)
 
-        y = self.conv.predict(self.test_x)
+        y = self.model.predict(self.test_x)
 
         pd.DataFrame({'ImageId': list(range(1, len(y) + 1)), 'Label': y}).to_csv(
             '../output/{}.csv'.format(model_name), sep=',', index=False)
+
+    def test_dense_conv_oral_infection(self):
+
+        dataset = pd.read_csv('input/oralnfection/dataset.csv')
+
+        kfold = KFold(10)
+
+        sum_auc, sum_acc = 0, 0
+
+        for i, (train_index, test_index) in kfold.split(dataset):
+
+            train_x = dataset.iloc[train_index,:-1]
+            train_y = dataset.iloc[train_index, -1]
+
+            test_x = dataset.iloc[test_index, :-1]
+            test_y = dataset.iloc[test_index, -1]
+
+            model_name = 'dense_conv_dense_test_01'
+
+            self.model = DenseConvDense()
+
+            self.model.build(train_x.shape[1], train_y.shape[1])
+
+            self.model.optimize(x=self.train_x, y=train_y, x_test=train_x[41000:, :],
+                               y_test=self.train_y[41000:, :],
+                               learning_rate=.25, steps=50, batch_size=500)
+
+            y_hat = self.model.predict(test_x)
+
+            auc, acc = roc_auc_score(test_y, y_hat), accuracy_score(test_y, y_hat)
+
+            sum_auc += auc
+            sum_acc += acc
+
+            print('Fold {}: ACC = {}, AUC = {}'.format(i + 1, acc, auc))
+
+        print('=================================================================')
+        print('MEAN: ACC = {}, AUC = {}'.format(sum_acc / 10., sum_auc / 10.))
+
+
 
 
