@@ -3,6 +3,7 @@ import pandas as pd
 
 from sklearn.model_selection import KFold
 from sklearn.metrics import roc_auc_score, accuracy_score
+from sklearn.preprocessing import MinMaxScaler
 from model import *
 
 
@@ -21,7 +22,7 @@ class TestDenseConvDense(unittest.TestCase):
 
         self.model = Dense(model_name='M0512-normalized-sigmoid-tanh-relu-adagrad-rmsprop-rmsprop')
 
-        self.model.build(n_input_features=self.train_x.shape[1], n_outputs=self.train_y.shape[1],
+        self.model.build(n_features=self.train_x.shape[1], n_outputs=self.train_y.shape[1],
                          abstraction_activation_functions=('sigmoid', 'tanh', 'relu'),
                          n_hidden_layers=3, optimizer_algorithms=('adagrad', 'rmsprop', 'rmsprop'),
                          n_hidden_nodes=512, keep_probability=0.5,
@@ -101,44 +102,4 @@ class TestDenseConvDense(unittest.TestCase):
 
         pd.DataFrame({'ImageId': list(range(1, len(y) + 1)), 'Label': y}).to_csv(
             '../output/{}.csv'.format(model_name), sep=',', index=False)
-
-    def test_dense_conv_oral_infection(self):
-
-        dataset = pd.read_csv('input/oralnfection/dataset.csv')
-
-        kfold = KFold(10)
-
-        sum_auc, sum_acc = 0, 0
-
-        for i, (train_index, test_index) in kfold.split(dataset):
-
-            train_x = dataset.iloc[train_index,:-1]
-            train_y = dataset.iloc[train_index, -1]
-
-            test_x = dataset.iloc[test_index, :-1]
-            test_y = dataset.iloc[test_index, -1]
-
-            model_name = 'dense_conv_dense_test_01'
-
-            self.model = DenseConvDense(model_name=model_name)
-
-            self.model.build(train_x.shape[1], train_y.shape[1])
-
-            self.model.optimize(x=self.train_x, y=train_y, x_test=test_x, y_test=test_y,
-                               learning_rate=.25, steps=50, batch_size=25)
-
-            y_hat = self.model.predict(test_x)
-
-            auc, acc = roc_auc_score(test_y, y_hat), accuracy_score(test_y, y_hat)
-
-            sum_auc += auc
-            sum_acc += acc
-
-            print('Fold {}: ACC = {}, AUC = {}'.format(i + 1, acc, auc))
-
-        print('=================================================================')
-        print('MEAN: ACC = {}, AUC = {}'.format(sum_acc / 10., sum_auc / 10.))
-
-
-
 

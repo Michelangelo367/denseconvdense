@@ -116,7 +116,7 @@ class ConvDense:
                 self.fc2 = tf.layers.dense(self.fc1, 1024, name='dense2', activation=tf.nn.relu)
                 self.fc2 = tf.layers.dropout(self.fc2, rate=self.keep_prob, training=self.training)
 
-                self.fc = tf.layers.dense(self.fc2, 10, name='output', activation=tf.nn.softmax)
+                self.fc = tf.layers.dense(self.fc2, self.n_outputs, name='output', activation=tf.nn.sigmoid)
 
             self.saver = tf.train.Saver()
 
@@ -127,43 +127,31 @@ class ConvDense:
             self.expected_output = tf.placeholder(tf.int64, shape=(None, self.n_outputs), name='expected_output')
             self.lr = tf.placeholder(tf.float32, name='learning_rate_ph')
 
-            with tf.name_scope('optimization_vgg19'):
+            with tf.name_scope('optimization'):
 
-                self.cost_function = tf.losses.huber_loss(labels=self.expected_output, predictions=self.fc)
+                self.cost_function = tf.losses.log_loss(labels=self.expected_output, predictions=self.fc, weights=1000.)
 
                 self.optimizer = self.VALID_OPTIMIZERS[self.optimizer_algorithm](learning_rate=self.lr).minimize(self.cost_function)
 
                 if self.add_summaries:
-                    tf.summary.scalar('cross_entropy_vgg19', tf.reduce_mean(self.cost_function))
+                    tf.summary.scalar('cross_entropy', tf.reduce_mean(self.cost_function))
 
             #
             # TODO Add new performance metrics
             #
-            with tf.name_scope('evaluation_vgg19'):
+            with tf.name_scope('evaluation'):
 
-                with tf.name_scope('correct_prediction_vgg19'):
-                    self.correct_prediction = tf.equal(tf.argmax(self.fc, 1), tf.argmax(self.expected_output, 1))
+                with tf.name_scope('correct_prediction'):
+                    self.correct_prediction = tf.logical_or(
+                            tf.logical_and(tf.greater_equal(self.fc, .5), tf.equal(self.expected_output, 1)),
+                            tf.logical_and(tf.less(self.fc, .5), tf.equal(self.expected_output, 0)))
 
-                with tf.name_scope('accuracy_vgg19'):
+                with tf.name_scope('accuracy'):
                     self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
 
             if self.add_summaries:
-                tf.summary.scalar('accuracy_vgg19', self.accuracy)
 
-                #
-                # Compute confusion matrix
-                #
-                with tf.name_scope('confusion_matrix_vgg19'):
-                    batch_confusion = tf.confusion_matrix(tf.argmax(self.expected_output, 1), tf.argmax(self.fc, 1), num_classes=10, name='batch_confusion')
-
-                    confusion = tf.Variable(
-                        tf.zeros([10, 10], dtype=tf.int32), name='confusion_var_vgg19')
-
-                    self.confusion_update = confusion.assign(batch_confusion)
-
-                    confusion_image = tf.reshape(tf.cast(confusion, tf.float32), [1, 10, 10, 1])
-
-                    tf.summary.image('confusion_vgg19}', confusion_image)
+                tf.summary.scalar('accuracy', self.accuracy)
 
                 #
                 # Create summary tensors
@@ -245,7 +233,7 @@ class ConvDense:
 
                 if self.add_summaries:
 
-                    run_list = [self.merged, self.accuracy, self.confusion_update]
+                    run_list = [self.merged, self.accuracy]
 
                     test_results = self.sess.run(run_list,
                                    feed_dict={self.input: x_test, self.expected_output: y_test,

@@ -111,13 +111,14 @@ class Dense(object):
 
             self.merged = None
 
-    def optimize(self, x, y, x_test=None, y_test=None, learning_rate=1e-5, steps=1000, batch_size=1000, shuffle=True):
+    def optimize(self, x, y, x_test=None, y_test=None, learning_rate=1e-5, steps=1000, batch_size=1000,
+                 weights=1.0, shuffle=True):
 
         assert steps > 0
 
         assert 0 < batch_size <= x.shape[0]
 
-        self.build_optimizers()
+        self.build_optimizers(weights=weights)
 
         print('Optimizing model')
 
@@ -161,15 +162,19 @@ class Dense(object):
                     batch = list(range(current_block, (min(current_block + batch_size, n_rows))))
 
                     self.sess.run([self.merged] + self.optimizers,
-                                  feed_dict={self.raw_input: x[index[batch], :], self.expected_output: y[index[batch], :],
-                                             self.keep_prob: self.keep_probability, self.lr: learning_rate, self.phase: True})
+                                  feed_dict={self.raw_input: x[index[batch], :],
+                                             self.expected_output: y[index[batch], :],
+                                             self.keep_prob: self.keep_probability,
+                                             self.lr: learning_rate, self.phase: True})
 
                     current_block += batch_size
 
                     j += 1
 
-                test_results = self.sess.run([self.merged] + self.accuracies + self.confusion_update,
-                                        feed_dict={self.raw_input: x_test, self.expected_output: y_test, self.keep_prob: 1., self.phase: False})
+                test_results = self.sess.run([self.merged],
+                                             feed_dict={self.raw_input: x_test,
+                                                        self.expected_output: y_test,
+                                                        self.keep_prob: 1., self.phase: False})
 
                 self.saver.save(self.sess, '../output/{0}/{0}'.format(self.model_name), global_step=step)
 
@@ -235,15 +240,18 @@ class Dense(object):
 
                 self.n_hidden_nodes = self.abstract_representation[-1][-1].shape[1]
 
-    def build(self, n_input_features, n_outputs, abstraction_activation_functions,
-                 n_hidden_layers, n_hidden_nodes, keep_probability, initialization,
-                 optimizer_algorithms, cost_function='softmax_cross_entropy', add_summaries=True,
-                 batch_normalization=True):
+        else:
+            print('Invalid model path: {}'.format(model_path))
 
-        self.init(n_input_features, n_outputs, abstraction_activation_functions,
-                 n_hidden_layers, n_hidden_nodes, keep_probability, initialization,
-                 optimizer_algorithms, cost_function, add_summaries,
-                 batch_normalization)
+    def build(self, n_features, n_outputs, abstraction_activation_functions,
+              n_hidden_layers, n_hidden_nodes, keep_probability, initialization,
+              optimizer_algorithms, cost_function='softmax_cross_entropy', add_summaries=True,
+              batch_normalization=True):
+
+        self.init(n_features, n_outputs, abstraction_activation_functions,
+                  n_hidden_layers, n_hidden_nodes, keep_probability, initialization,
+                  optimizer_algorithms, cost_function, add_summaries,
+                  batch_normalization)
 
         with self.graph.as_default():
 
@@ -257,13 +265,13 @@ class Dense(object):
 
                 for i, activation_function in enumerate(self.abstraction_activation_functions):
 
-                    with tf.name_scope('{}_model'.format(activation_function)):
+                    with tf.name_scope('{}_model'.format(activation_function[:4])):
 
                         previous_layer_size, previous_layer = self.n_input_features, self.raw_input
 
                         for j in range(self.n_hidden_layers):
 
-                            layer_name = 'hidden_{}_layer_{}'.format(activation_function, j + 1)
+                            layer_name = 'hidden_{}_layer_{}'.format(activation_function[:4], j + 1)
 
                             with tf.name_scope(layer_name):
                                 #
@@ -271,20 +279,20 @@ class Dense(object):
                                 #
                                 af = self.VALID_ACTIVATION_FUNCTIONS[activation_function]
 
-                                weight_name = 'weight_{}_h{}{}'.format(activation_function, i + 1, j + 1)
+                                weight_name = 'weight_{}_h{}{}'.format(activation_function[:4], i + 1, j + 1)
 
                                 w = tf.Variable(tf.truncated_normal([previous_layer_size, self.n_hidden_nodes], stddev=.1), name=weight_name)
 
-                                bias_name = 'bias_{}_h{}{}'.format(activation_function, i + 1, j + 1)
+                                bias_name = 'bias_{}_h{}{}'.format(activation_function[:4], i + 1, j + 1)
 
                                 b = tf.Variable(tf.truncated_normal([self.n_hidden_nodes], stddev=.1), name=bias_name)
 
-                                abstraction_layer_name = 'abstraction_{}_layer_{}'.format(activation_function, j + 1)
+                                abstraction_layer_name = 'abstraction_{}_layer_{}'.format(activation_function[:4], j + 1)
 
                                 self.abstract_representation[i][j] = \
                                     tf.nn.dropout(af(tf.add(tf.matmul(previous_layer, w), b)), self.keep_prob,
                                                   name=abstraction_layer_name if not self.batch_normalization
-                                                  else 'dropout_{}_{}'.format(activation_function, j + 1))
+                                                        else 'dropout_{}_{}'.format(activation_function[:4], j + 1))
 
                                 if self.batch_normalization:
                                     self.abstract_representation[i][j] = \
@@ -298,17 +306,17 @@ class Dense(object):
                                     util.create_tf_scalar_summaries(b, 'biases')
                                     util.create_tf_scalar_summaries(self.abstract_representation[i][j], 'activation')
 
-                        with tf.name_scope('output_{}_layer'.format(activation_function)):
+                        with tf.name_scope('output_{}_layer'.format(activation_function[:4])):
 
-                            weight_name = 'weight_{}_out'.format(activation_function)
+                            weight_name = 'weight_{}_out'.format(activation_function[:4])
 
                             w = tf.Variable(tf.truncated_normal([previous_layer_size, self.n_outputs], stddev=.1), name=weight_name)
 
-                            bias_name = 'bias_{}_out'.format(activation_function)
+                            bias_name = 'bias_{}_out'.format(activation_function[:4])
 
                             b = tf.Variable(tf.truncated_normal([self.n_outputs], stddev=.1), name=bias_name)
 
-                            dense_name = 'dense_model_{}'.format(activation_function)
+                            dense_name = 'dense_model_{}'.format(activation_function[:4])
 
                             self.models[i] = tf.add(tf.matmul(previous_layer, w), b, name=dense_name)
 
@@ -319,7 +327,7 @@ class Dense(object):
 
             self.saver = tf.train.Saver()
 
-    def build_optimizers(self):
+    def build_optimizers(self, weights=1.0):
 
         print('Building optimizers')
 
@@ -337,7 +345,8 @@ class Dense(object):
 
                     with tf.name_scope('optimization_{}'.format(activation_function)):
 
-                        self.cost_functions[i] = tf.nn.softmax_cross_entropy_with_logits(labels=self.expected_output, logits=model)
+                        self.cost_functions[i] = tf.nn.weighted_cross_entropy_with_logits(
+                            targets=self.expected_output, logits=model, pos_weight=np.array(weights))
 
                         self.optimizers[i] = self.VALID_OPTIMIZERS[optimizer](learning_rate=self.lr).minimize(self.cost_functions[i])
 
@@ -354,6 +363,9 @@ class Dense(object):
 
                     with tf.name_scope('correct_prediction_{}'.format(activation_function)):
                         self.correct_predictions[i] = tf.equal(tf.argmax(model, 1), tf.argmax(self.expected_output, 1))
+                        #self.correct_predictions[i] = tf.logical_or(
+                        #    tf.logical_and(tf.greater_equal(model, .5), tf.equal(self.expected_output, 1)),
+                        #    tf.logical_and(tf.less(model, .5), tf.equal(self.expected_output, 0)))
 
                     with tf.name_scope('accuracy_{}'.format(activation_function)):
                         self.accuracies[i] = tf.reduce_mean(tf.cast(self.correct_predictions[i], tf.float32))
@@ -361,26 +373,6 @@ class Dense(object):
                 if self.add_summaries:
 
                     tf.summary.scalar('accuracy_{}'.format(activation_function), self.accuracies[i])
-
-                    #
-                    # Compute confusion matrix
-                    #
-                    with tf.name_scope('confusion_matrix_{}'.format(activation_function)):
-
-                        batch_confusion = tf.confusion_matrix(tf.argmax(self.expected_output, 1), tf.argmax(model, 1),
-                                                              num_classes=self.n_outputs,
-                                                              name='batch_confusion')
-
-                        confusion = tf.Variable(
-                            tf.zeros([self.n_outputs, self.n_outputs],
-                            dtype=tf.int32), name='confusion_var_{}'.format(activation_function))
-
-                        self.confusion_update += [confusion.assign(batch_confusion)]
-
-                        confusion_image = tf.reshape(tf.cast(confusion, tf.float32),
-                                                     [1, self.n_outputs, self.n_outputs, 1])
-
-                        tf.summary.image('confusion_{}'.format(activation_function), confusion_image)
 
                     #
                     # Create summary tensors
